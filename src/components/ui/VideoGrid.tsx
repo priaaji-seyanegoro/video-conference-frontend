@@ -5,6 +5,8 @@ import { User } from '@/types';
 
 interface VideoGridProps {
   localStream?: MediaStream;
+  screenStream?: MediaStream;
+  isScreenSharing: boolean;
   remoteStreams: Map<string, MediaStream>;
   users: User[];
   localUser?: User;
@@ -13,15 +15,65 @@ interface VideoGridProps {
 
 export const VideoGrid: React.FC<VideoGridProps> = ({
   localStream,
+  screenStream,
+  isScreenSharing,
   remoteStreams,
   users,
   localUser,
   className
 }) => {
-  const totalUsers = (localStream ? 1 : 0) + users.length;
+  const totalUsers = users.length + (localStream || screenStream ? 1 : 0);
+
+  if (isScreenSharing) {
+    return (
+      <div className={cn("h-full w-full p-4 flex", className)}>
+        {/* Main screen share view */}
+        <div className="flex-1 relative">
+          <VideoPlayer
+            stream={screenStream}
+            isLocal={true}
+            isScreenShare={true}
+            userName="Your Screen"
+            className="w-full h-full"
+          />
+        </div>
+        
+        {/* Sidebar for other videos */}
+        <div className="w-48 ml-4 flex flex-col space-y-4">
+          {/* Local camera view (PiP) */}
+          {localStream && (
+            <VideoPlayer
+              stream={localStream}
+              isLocal={true}
+              isMuted={!(localUser?.isAudioEnabled ?? true)}
+              isVideoEnabled={localUser?.isVideoEnabled ?? true}
+              userName={localUser?.name || 'You'}
+              className="w-full aspect-video"
+            />
+          )}
+          
+          {/* Remote users */}
+          {users.map((user) => {
+            const stream = remoteStreams.get(user.id);
+            return (
+              <VideoPlayer
+                key={user.id}
+                stream={stream}
+                isLocal={false}
+                isMuted={!user.isAudioEnabled}
+                isVideoEnabled={user.isVideoEnabled}
+                userName={user.name}
+                className="w-full aspect-video"
+              />
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   // Layout khusus untuk satu peserta agar video tidak fullscreen
-  if (totalUsers === 1) {
+  if (totalUsers === 1 && localStream) {
     return (
       <div className={cn('flex items-center justify-center h-full p-4', className)}>
         <div className="w-full max-w-4xl aspect-video rounded-lg overflow-hidden shadow-2xl">

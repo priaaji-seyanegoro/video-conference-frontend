@@ -7,6 +7,7 @@ interface VideoPlayerProps {
   isLocal?: boolean;
   isMuted?: boolean;
   isVideoEnabled?: boolean;
+  isScreenShare?: boolean;
   userName?: string;
   className?: string;
 }
@@ -16,6 +17,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   isLocal = false,
   isMuted = false,
   isVideoEnabled = true,
+  isScreenShare = false,
   userName = "Unknown",
   className,
 }) => {
@@ -30,40 +32,42 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   useEffect(() => {
     const videoElement = videoRef.current;
-    if (videoElement && stream) {
-      // Hanya perbarui srcObject jika stream-nya benar-benar baru
+    if (!videoElement) return;
+
+    const handleLoadedData = () => {
+      console.log(`[VideoPlayer] Data loaded for stream: ${stream?.id}`);
+    };
+    const handlePlay = () => {
+      console.log(`[VideoPlayer] Playback started for stream: ${stream?.id}`);
+    };
+    const handleError = (e: Event) => {
+      console.error(
+        `[VideoPlayer] Error on video element for stream ${stream?.id}:`,
+        e
+      );
+      setVideoError(true);
+    };
+
+    if (stream) {
       if (videoElement.srcObject !== stream) {
+        console.log(
+          `[VideoPlayer] Attaching stream ${stream.id} to video element.`
+        );
         videoElement.srcObject = stream;
-        setVideoError(false);
       }
 
-      const playVideo = async () => {
-        try {
-          await videoElement.play();
-        } catch (error: any) {
-          // Permintaan play() yang dibatalkan adalah hal biasa dan dapat diabaikan.
-          if (error.name === "AbortError") {
-            console.log("Pemutaran video diinterupsi. Ini normal.");
-          } else {
-            console.error("Error saat memutar video:", error);
-            setVideoError(true);
-          }
-        }
-      };
-
-      playVideo();
-
-      const handleError = () => {
-        console.error("Video element error");
-        setVideoError(true);
-      };
-
+      videoElement.addEventListener("loadeddata", handleLoadedData);
+      videoElement.addEventListener("play", handlePlay);
       videoElement.addEventListener("error", handleError);
-
-      return () => {
-        videoElement.removeEventListener("error", handleError);
-      };
+    } else {
+      videoElement.srcObject = null;
     }
+
+    return () => {
+      videoElement.removeEventListener("loadeddata", handleLoadedData);
+      videoElement.removeEventListener("play", handlePlay);
+      videoElement.removeEventListener("error", handleError);
+    };
   }, [stream]);
 
   useEffect(() => {
@@ -141,11 +145,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [stream]);
 
   return (
-    <div className={cn(
-      'relative bg-gray-900 rounded-lg overflow-hidden transition-all duration-300',
-      isSpeaking && !isMuted && 'border-4 border-green-500',
-      className
-    )}>
+    <div
+      className={cn(
+        "relative bg-gray-900 rounded-lg overflow-hidden transition-all duration-300",
+        isSpeaking && !isMuted && "border-4 border-green-500",
+        className
+      )}
+    >
       {isVideoEnabled && stream && !videoError ? (
         <video
           ref={videoRef}
@@ -153,8 +159,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           playsInline
           muted={isLocal}
           className={cn(
-            "w-full h-full object-cover",
-            isLocal && "transform -scale-x-100"
+            "w-full h-full",
+            isScreenShare ? "object-contain" : "object-cover",
+            isLocal && !isScreenShare && "transform -scale-x-100"
           )}
           style={{ backgroundColor: "#1f2937" }}
         />

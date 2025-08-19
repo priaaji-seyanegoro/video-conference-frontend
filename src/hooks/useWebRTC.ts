@@ -1,10 +1,10 @@
-import { useEffect, useRef, useCallback } from 'react';
-import SimplePeer from 'simple-peer';
-import { useMediaStore } from '@/store/mediaStore';
-import { useRoomStore } from '@/store/roomStore';
-import { useSocket } from './useSocket';
-import { createPeer } from '@/utils/webrtc';
-import { PeerConnection } from '@/types';
+import { useEffect, useRef, useCallback } from "react";
+import SimplePeer from "simple-peer";
+import { useMediaStore } from "@/store/mediaStore";
+import { useRoomStore } from "@/store/roomStore";
+import { useSocket } from "./useSocket";
+import { createPeer } from "@/utils/webrtc";
+import { PeerConnection } from "@/types";
 
 export const useWebRTC = () => {
   const {
@@ -15,7 +15,7 @@ export const useWebRTC = () => {
     removePeer,
     updatePeerStream,
   } = useMediaStore();
-  
+
   const { users, currentUser } = useRoomStore();
   const { socket } = useSocket();
   const peersRef = useRef<{ [userId: string]: SimplePeer.Instance }>({});
@@ -24,94 +24,109 @@ export const useWebRTC = () => {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('webrtc-offer', handleOffer);
-    socket.on('webrtc-answer', handleAnswer);
-    socket.on('ice-candidate', handleIceCandidate);
-    socket.on('user-joined', handleUserJoined);
-    socket.on('user-left', handleUserLeft);
+    socket.on("webrtc-offer", handleOffer);
+    socket.on("webrtc-answer", handleAnswer);
+    socket.on("ice-candidate", handleIceCandidate);
+    socket.on("user-joined", handleUserJoined);
+    socket.on("user-left", handleUserLeft);
 
     return () => {
-      socket.off('webrtc-offer', handleOffer);
-      socket.off('webrtc-answer', handleAnswer);
-      socket.off('ice-candidate', handleIceCandidate);
-      socket.off('user-joined', handleUserJoined);
-      socket.off('user-left', handleUserLeft);
+      socket.off("webrtc-offer", handleOffer);
+      socket.off("webrtc-answer", handleAnswer);
+      socket.off("ice-candidate", handleIceCandidate);
+      socket.off("user-joined", handleUserJoined);
+      socket.off("user-left", handleUserLeft);
     };
   }, [socket]);
 
-  const handleOffer = useCallback(({ offer, fromUserId }: { offer: any, fromUserId: string }) => {
-    if (!localStream) return;
+  const handleOffer = useCallback(
+    ({ offer, fromUserId }: { offer: any; fromUserId: string }) => {
+      if (!localStream) return;
 
-    const peer = createPeer(false, localStream);
-    peersRef.current[fromUserId] = peer;
+      const peer = createPeer(false, localStream);
+      peersRef.current[fromUserId] = peer;
 
-    peer.on('signal', (signal) => {
-      socket?.emit('webrtc-answer', { answer: signal, toUserId: fromUserId });
-    });
+      peer.on("signal", (signal) => {
+        socket?.emit("webrtc-answer", { answer: signal, toUserId: fromUserId });
+      });
 
-    peer.on('stream', (stream) => {
-      updatePeerStream(fromUserId, stream);
-    });
+      peer.on("stream", (stream) => {
+        updatePeerStream(fromUserId, stream);
+      });
 
-    peer.on('error', (error) => {
-      console.error('Peer error:', error);
-      removePeer(fromUserId);
-      delete peersRef.current[fromUserId];
-    });
+      peer.on("error", (error) => {
+        console.error("Peer error:", error);
+        removePeer(fromUserId);
+        delete peersRef.current[fromUserId];
+      });
 
-    peer.signal(offer);
-    
-    addPeer({ userId: fromUserId, peer, stream: null });
-  }, [localStream, socket, addPeer, updatePeerStream, removePeer]);
+      peer.signal(offer);
 
-  const handleAnswer = useCallback(({ answer, fromUserId }: { answer: any, fromUserId: string }) => {
-    const peer = peersRef.current[fromUserId];
-    if (peer) {
-      peer.signal(answer);
-    }
-  }, []);
+      addPeer({ userId: fromUserId, peer, stream: null });
+    },
+    [localStream, socket, addPeer, updatePeerStream, removePeer]
+  );
 
-  const handleIceCandidate = useCallback(({ candidate, fromUserId }: { candidate: any, fromUserId: string }) => {
-    const peer = peersRef.current[fromUserId];
-    if (peer) {
-      peer.signal(candidate);
-    }
-  }, []);
+  const handleAnswer = useCallback(
+    ({ answer, fromUserId }: { answer: any; fromUserId: string }) => {
+      const peer = peersRef.current[fromUserId];
+      if (peer) {
+        peer.signal(answer);
+      }
+    },
+    []
+  );
 
-  const handleUserJoined = useCallback(({ user }: { user: any }) => {
-    if (!localStream || !currentUser || user.id === currentUser.id) return;
+  const handleIceCandidate = useCallback(
+    ({ candidate, fromUserId }: { candidate: any; fromUserId: string }) => {
+      const peer = peersRef.current[fromUserId];
+      if (peer) {
+        peer.signal(candidate);
+      }
+    },
+    []
+  );
 
-    const peer = createPeer(true, localStream);
-    peersRef.current[user.id] = peer;
+  const handleUserJoined = useCallback(
+    ({ user }: { user: any }) => {
+      if (!localStream || !currentUser || user.id === currentUser.id) return;
 
-    peer.on('signal', (signal) => {
-      socket?.emit('webrtc-offer', { offer: signal, toUserId: user.id });
-    });
+      const peer = createPeer(true, localStream);
+      peersRef.current[user.id] = peer;
 
-    peer.on('stream', (stream) => {
-      updatePeerStream(user.id, stream);
-    });
+      peer.on("signal", (signal) => {
+        socket?.emit("webrtc-offer", { offer: signal, toUserId: user.id });
+      });
 
-    peer.on('error', (error) => {
-      console.error('Peer error:', error);
-      removePeer(user.id);
-      delete peersRef.current[user.id];
-    });
+      peer.on("stream", (stream) => {
+        updatePeerStream(user.id, stream);
+      });
 
-    addPeer({ userId: user.id, peer, stream: null });
-  }, [localStream, currentUser, socket, addPeer, updatePeerStream, removePeer]);
+      peer.on("error", (error) => {
+        console.error("Peer error:", error);
+        removePeer(user.id);
+        delete peersRef.current[user.id];
+      });
 
-  const handleUserLeft = useCallback(({ userId }: { userId: string }) => {
-    const peer = peersRef.current[userId];
-    if (peer) {
-      peer.destroy();
-      delete peersRef.current[userId];
-    }
-    removePeer(userId);
-  }, [removePeer]);
+      addPeer({ userId: user.id, peer, stream: null });
+    },
+    [localStream, currentUser, socket, addPeer, updatePeerStream, removePeer]
+  );
+
+  const handleUserLeft = useCallback(
+    ({ userId }: { userId: string }) => {
+      const peer = peersRef.current[userId];
+      if (peer) {
+        peer.destroy();
+        delete peersRef.current[userId];
+      }
+      removePeer(userId);
+    },
+    [removePeer]
+  );
 
   const updatePeerStreams = useCallback((newStream: MediaStream | null) => {
-    Object.values(peersRef.current).forEach(peer => {
+    Object.values(peersRef.current).forEach((peer) => {
       if (newStream) {
         peer.replaceTrack(
           peer.streams[0]?.getVideoTracks()[0],
@@ -128,7 +143,7 @@ export const useWebRTC = () => {
   }, []);
 
   const destroyAllPeers = useCallback(() => {
-    Object.values(peersRef.current).forEach(peer => {
+    Object.values(peersRef.current).forEach((peer) => {
       peer.destroy();
     });
     peersRef.current = {};
