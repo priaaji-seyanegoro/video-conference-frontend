@@ -52,18 +52,68 @@ export const useMedia = (socket: typeof Socket | null) => {
   }, [localStream, socket, toggleAudioInStore]);
 
   const toggleVideo = useCallback(async () => {
-    if (!localStream || !socket) return;
-    
-    const videoTrack = localStream.getVideoTracks()[0];
-    if (videoTrack) {
-      const newState = !videoTrack.enabled;
-      videoTrack.enabled = newState;
-      toggleVideoInStore();
-      socket.emit("toggle-video", { enabled: newState });
-    }
-  }, [localStream, socket, toggleVideoInStore]);
+    if (!socket) return;
 
-  const stopScreenShare = useCallback(() => {
+    // Tidak ada stream saat ini
+    if (!localStream) {
+      if (isVideoEnabled) {
+        setVideoEnabled(false);
+        socket.emit("toggle-video", { enabled: false });
+        return;
+      } else {
+        try {
+          const cam = await getUserMedia({ video: true, audio: true });
+          setLocalStream(cam);
+          setAudioEnabled(true);
+          setVideoEnabled(true);
+          socket.emit("toggle-video", { enabled: true });
+        } catch (e) {
+          console.error("[useMedia] Failed to getUserMedia when enabling video without stream:", e);
+        }
+        return;
+      }
+    }
+
+    const videoTracks = localStream.getVideoTracks();
+    const audioTracks = localStream.getAudioTracks();
+
+    if (isVideoEnabled) {
+      // Turn OFF: stop semua video track agar kamera benar-benar mati
+      for (const vt of videoTracks) {
+        try { vt.stop(); } catch {}
+      }
+      const newStream = new MediaStream([...audioTracks]); // hanya audio
+      setLocalStream(newStream);
+      setVideoEnabled(false);
+      socket.emit("toggle-video", { enabled: false });
+    } else {
+      // Turn ON: re-acquire video track baru lalu compose dengan audio lama
+      try {
+        const camStream = await getUserMedia({ video: true, audio: false });
+        const newVideoTrack = camStream.getVideoTracks()[0];
+
+        const newStream = new MediaStream([
+          newVideoTrack,
+          ...audioTracks,
+        ]);
+
+        setLocalStream(newStream);
+        setVideoEnabled(true);
+        socket.emit("toggle-video", { enabled: true });
+      } catch (e) {
+        console.error("[useMedia] Failed to re-acquire camera on enable:", e);
+      }
+    }
+  }, [
+    socket,
+    localStream,
+    isVideoEnabled,
+    setLocalStream,
+    setVideoEnabled,
+    setAudioEnabled,
+  ]);
+
+  const stopScreenShare = useCallback(async () => {
     if (!socket) return;
     if (screenStream) {
       stopMediaStream(screenStream);
@@ -71,7 +121,27 @@ export const useMedia = (socket: typeof Socket | null) => {
     }
     setScreenSharing(false);
     socket.emit("toggle-screen-share", { enabled: false });
-  }, [screenStream, setScreenStream, setScreenSharing, socket]);
+
+    // Pastikan kamera kembali live setelah berhenti share
+    try {
+      const currentVideoTrack = localStream?.getVideoTracks?.()[0];
+      const videoLive = !!currentVideoTrack && currentVideoTrack.readyState === 'live';
+
+      if (!videoLive) {
+        const cam = await getUserMedia({ video: true, audio: true });
+        setLocalStream(cam);
+        setAudioEnabled(true);
+        setVideoEnabled(true);
+        console.log('[useMedia] Re-acquired camera after stopping screen share:', {
+          id: cam.id,
+          videoTracks: cam.getVideoTracks().length,
+          audioTracks: cam.getAudioTracks().length,
+        });
+      }
+    } catch (e) {
+      console.error('[useMedia] Failed to re-acquire camera after stopping screen share:', e);
+    }
+  }, [socket, screenStream, setScreenStream, setScreenSharing, localStream, setLocalStream, setAudioEnabled, setVideoEnabled]);
 
   const startScreenShare = useCallback(async () => {
     if (!socket) return;
@@ -94,7 +164,7 @@ export const useMedia = (socket: typeof Socket | null) => {
 
   const toggleScreenShare = useCallback(async () => {
     if (isScreenSharing) {
-      stopScreenShare();
+      await stopScreenShare();
     } else {
       await startScreenShare();
     }

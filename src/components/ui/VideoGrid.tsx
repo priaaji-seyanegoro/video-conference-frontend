@@ -1,7 +1,28 @@
-import React from 'react';
-import { VideoPlayer } from './VideoPlayer';
-import { cn } from '@/utils/cn';
-import { User } from '@/types';
+import React from "react";
+import { VideoPlayer } from "./VideoPlayer";
+import { cn } from "@/utils/cn";
+import { User } from "@/types";
+
+// Helper layout grid (statis agar aman untuk Tailwind)
+const getGridCols = (count: number): string => {
+  if (count <= 1) return "grid-cols-1";
+  if (count === 2) return "grid-cols-2";
+  if (count <= 4) return "grid-cols-2";
+  if (count <= 6) return "grid-cols-3";
+  if (count <= 9) return "grid-cols-3";
+  if (count <= 12) return "grid-cols-4";
+  return "grid-cols-4";
+};
+
+const getGridRows = (count: number): string => {
+  if (count <= 1) return "grid-rows-1";
+  if (count === 2) return "grid-rows-1";
+  if (count <= 4) return "grid-rows-2";
+  if (count <= 6) return "grid-rows-2";
+  if (count <= 9) return "grid-rows-3";
+  if (count <= 12) return "grid-rows-3";
+  return "grid-rows-4";
+};
 
 interface VideoGridProps {
   localStream?: MediaStream;
@@ -11,6 +32,8 @@ interface VideoGridProps {
   users: User[];
   localUser?: User;
   className?: string;
+  isLocalAudioEnabled: boolean;
+  isLocalVideoEnabled: boolean;
 }
 
 export const VideoGrid: React.FC<VideoGridProps> = ({
@@ -20,7 +43,9 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
   remoteStreams,
   users,
   localUser,
-  className
+  className,
+  isLocalAudioEnabled,
+  isLocalVideoEnabled,
 }) => {
   const totalUsers = users.length + (localStream || screenStream ? 1 : 0);
 
@@ -37,7 +62,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
             className="w-full h-full"
           />
         </div>
-        
+
         {/* Sidebar for other videos */}
         <div className="w-48 ml-4 flex flex-col space-y-4">
           {/* Local camera view (PiP) */}
@@ -45,13 +70,13 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
             <VideoPlayer
               stream={localStream}
               isLocal={true}
-              isMuted={!(localUser?.isAudioEnabled ?? true)}
-              isVideoEnabled={localUser?.isVideoEnabled ?? true}
-              userName={localUser?.name || 'You'}
+              isMuted={!isLocalAudioEnabled}
+              isVideoEnabled={isLocalVideoEnabled}
+              userName={localUser?.name || "You"}
               className="w-full aspect-video"
             />
           )}
-          
+
           {/* Remote users */}
           {users.map((user) => {
             const stream = remoteStreams.get(user.id);
@@ -75,16 +100,18 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
   // Layout khusus untuk satu peserta agar video tidak fullscreen
   if (totalUsers === 1 && localStream) {
     return (
-      <div className={cn('flex items-center justify-center h-full p-4', className)}>
+      <div
+        className={cn("flex items-center justify-center h-full p-4", className)}
+      >
         <div className="w-full max-w-4xl aspect-video rounded-lg overflow-hidden shadow-2xl">
           {localStream && (
             <VideoPlayer
-              key={localUser?.id || 'local-user'}
+              key={localUser?.id || "local-user"}
               stream={localStream}
               isLocal={true}
-              isMuted={!(localUser?.isAudioEnabled ?? true)}
-              isVideoEnabled={localUser?.isVideoEnabled ?? true}
-              userName={localUser?.name || 'You'}
+              isMuted={!isLocalAudioEnabled}
+              isVideoEnabled={isLocalVideoEnabled}
+              userName={localUser?.name || "You"}
             />
           )}
         </div>
@@ -92,41 +119,28 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
     );
   }
 
-  // Tata letak grid untuk banyak peserta
-  const getGridCols = (count: number) => {
-    if (count === 2) return 'grid-cols-2';
-    if (count <= 4) return 'grid-cols-2';
-    if (count <= 9) return 'grid-cols-3';
-    return 'grid-cols-4';
-  };
-
-  const getGridRows = (count: number) => {
-    if (count <= 2) return 'grid-rows-1';
-    if (count <= 4) return 'grid-rows-2';
-    if (count <= 9) return 'grid-rows-3';
-    return 'grid-rows-4';
-  };
-
   return (
-    <div className={cn(
-      'grid gap-2 p-4 h-full',
-      getGridCols(totalUsers),
-      getGridRows(totalUsers),
-      className
-    )}>
+    <div
+      className={cn(
+        "grid gap-2 p-4 h-full",
+        getGridCols(totalUsers),
+        getGridRows(totalUsers),
+        className
+      )}
+    >
       {/* Render video pengguna lokal */}
       {localStream && (
         <VideoPlayer
-          key={localUser?.id || 'local-user'}
+          key={localUser?.id || "local-user"}
           stream={localStream}
           isLocal={true}
-          isMuted={!(localUser?.isAudioEnabled ?? true)}
-          isVideoEnabled={localUser?.isVideoEnabled ?? true}
-          userName={localUser?.name || 'You'}
+          isMuted={!isLocalAudioEnabled}
+          isVideoEnabled={isLocalVideoEnabled}
+          userName={localUser?.name || "You"}
           className="min-h-[150px]"
         />
       )}
-      
+
       {/* Render video pengguna remote */}
       {users.map((user) => {
         const stream = remoteStreams.get(user.id);

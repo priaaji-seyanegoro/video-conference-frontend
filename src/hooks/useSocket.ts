@@ -33,7 +33,7 @@ export const useSocket = () => {
       setConnected(false);
     });
 
-    socket.on("connect_error", (error) => {
+    socket.on("connect_error", (error: any) => {
       console.error("Connection error:", error);
       setError("Failed to connect to server");
       setConnected(false);
@@ -52,9 +52,12 @@ export const useSocket = () => {
       removeUser(userId);
     });
 
-    socket.on("user-media-updated", ({ userId, mediaState }) => {
-      updateUser(userId, mediaState);
-    });
+    socket.on(
+      "user-media-updated",
+      ({ userId, mediaState }: { userId: string; mediaState: any }) => {
+        updateUser(userId, mediaState);
+      }
+    );
 
     // Chat events
     socket.on("new-message", (message: Message) => {

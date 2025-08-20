@@ -39,6 +39,40 @@ export const useWebRTC = () => {
     };
   }, [socket]);
 
+  // Ganti track outgoing ke peers saat start/stop screen share
+  useEffect(() => {
+    const activeStream = screenStream ?? localStream;
+    // Tidak ada stream aktif, tidak perlu apa-apa
+    if (!activeStream) return;
+
+    const newVideo = activeStream.getVideoTracks()?.[0] || null;
+    const newAudio = activeStream.getAudioTracks()?.[0] || null;
+
+    Object.values(peersRef.current).forEach((peer) => {
+      try {
+        // Akses RTCPeerConnection dari simple-peer
+        const pc = (peer as any)?._pc;
+        if (!pc || !pc.getSenders) return;
+
+        const senders: RTCRtpSender[] = pc.getSenders() || [];
+
+        // Replace video sender
+        const videoSender = senders.find((s) => s.track && s.track.kind === 'video');
+        if (videoSender && videoSender.track !== newVideo) {
+          videoSender.replaceTrack(newVideo);
+        }
+
+        // Replace audio sender
+        const audioSender = senders.find((s) => s.track && s.track.kind === 'audio');
+        if (audioSender && audioSender.track !== newAudio) {
+          audioSender.replaceTrack(newAudio);
+        }
+      } catch (err) {
+        console.error('Failed to replace tracks on peer:', err);
+      }
+    });
+  }, [screenStream, localStream]);
+
   const handleOffer = useCallback(
     ({ offer, fromUserId }: { offer: any; fromUserId: string }) => {
       if (!localStream) return;

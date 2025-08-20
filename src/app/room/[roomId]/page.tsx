@@ -40,7 +40,7 @@ export default function RoomPage() {
     isScreenSharing, 
     localStream, 
     remoteStreams,
-    screenStream, // <-- tambahkan ini
+    screenStream, // pastikan sudah ada
   } = useMediaStore();
   
   // Hooks
@@ -60,8 +60,6 @@ export default function RoomPage() {
     toggleVideo: handleToggleVideo, 
     toggleScreenShare: handleToggleScreenShare 
   } = useMedia(socket);
-  
-  const { } = useWebRTC(socket);
   
   // Initialize media on mount
   useEffect(() => {
@@ -141,11 +139,13 @@ export default function RoomPage() {
         <div className="flex-1">
           <VideoGrid
             localStream={localStream}
-            screenStream={screenStream}            // <-- kirim stream screen share
-            isScreenSharing={isScreenSharing}      // <-- kirim status screen share
+            screenStream={screenStream}
+            isScreenSharing={isScreenSharing}
             remoteStreams={remoteStreams}
             users={otherUsers}
             localUser={currentUser}
+            isLocalAudioEnabled={isAudioEnabled}
+            isLocalVideoEnabled={isVideoEnabled}
           />
         </div>
         

@@ -49,25 +49,52 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
 
     if (stream) {
-      if (videoElement.srcObject !== stream) {
-        console.log(
-          `[VideoPlayer] Attaching stream ${stream.id} to video element.`
-        );
+      // Paksa re-attach untuk menghindari video macet
+      try {
+        if (videoElement.srcObject) {
+          videoElement.srcObject = null as any;
+        }
+        videoElement.load();
         videoElement.srcObject = stream;
+      } catch (e) {
+        console.warn("[VideoPlayer] Failed to (re)attach srcObject:", e);
       }
 
       videoElement.addEventListener("loadeddata", handleLoadedData);
       videoElement.addEventListener("play", handlePlay);
       videoElement.addEventListener("error", handleError);
+
+      const playNow = () => {
+        const p = videoElement.play();
+        if (p && typeof (p as any).catch === "function") {
+          (p as any).catch((err: any) => {
+            console.warn("[VideoPlayer] video.play() was prevented:", err);
+          });
+        }
+      };
+      playNow();
+
+      // Retry singkat jika dimensi masih 0 (tanda belum rendering frame)
+      const retry = setTimeout(() => {
+        if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+          try {
+            videoElement.srcObject = null as any;
+            videoElement.load();
+            videoElement.srcObject = stream;
+            playNow();
+          } catch {}
+        }
+      }, 600);
+
+      return () => {
+        clearTimeout(retry);
+        videoElement.removeEventListener("loadeddata", handleLoadedData);
+        videoElement.removeEventListener("play", handlePlay);
+        videoElement.removeEventListener("error", handleError);
+      };
     } else {
       videoElement.srcObject = null;
     }
-
-    return () => {
-      videoElement.removeEventListener("loadeddata", handleLoadedData);
-      videoElement.removeEventListener("play", handlePlay);
-      videoElement.removeEventListener("error", handleError);
-    };
   }, [stream]);
 
   useEffect(() => {
@@ -131,6 +158,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [stream, isMuted, isLocal]);
 
+  // Paksa play saat user mengaktifkan kamera lagi
+  useEffect(() => {
+    if (!isVideoEnabled) return;
+    const videoElement = videoRef.current;
+    const vt = stream?.getVideoTracks?.()[0];
+    if (videoElement && stream && vt && vt.readyState === "live") {
+      const p = videoElement.play();
+      if (p && typeof (p as any).catch === "function") {
+        (p as any).catch(() => {});
+      }
+    }
+  }, [isVideoEnabled, stream]);
+
   // Debug: Log stream info
   useEffect(() => {
     if (stream) {
@@ -140,9 +180,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         videoTracks: stream.getVideoTracks().length,
         audioTracks: stream.getAudioTracks().length,
         videoTrackEnabled: stream.getVideoTracks()[0]?.enabled,
+        videoTrackState: stream.getVideoTracks()[0]?.readyState,
       });
+
+      // Log jika track video berakhir
+      const vt = stream.getVideoTracks()[0];
+      if (vt) {
+        const onended = () => {
+          console.warn('[VideoPlayer] video track ended for stream:', stream.id);
+        };
+        vt.addEventListener('ended', onended);
+        return () => vt.removeEventListener('ended', onended);
+      }
     }
   }, [stream]);
+
+  // Hitung apakah track video benar-benar live
+  const isVideoTrackLive = (() => {
+    const vt = stream?.getVideoTracks?.()[0];
+    return !!vt && vt.readyState === 'live' && vt.enabled !== false;
+  })();
+
+  const shouldRenderVideo = isVideoEnabled && isVideoTrackLive && !!stream && !videoError;
 
   return (
     <div
@@ -152,7 +211,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         className
       )}
     >
-      {isVideoEnabled && stream && !videoError ? (
+      {shouldRenderVideo ? (
         <video
           ref={videoRef}
           autoPlay
@@ -166,19 +225,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           style={{ backgroundColor: "#1f2937" }}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center bg-gray-800">
+        <div className="w-full h-full flex items-center justify-center bg-gray-900">
           <div className="text-center">
-            <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-2">
-              <span className="text-white text-xl font-semibold">
+            <div className="w-20 h-20 md:w-28 md:h-28 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="text-white text-2xl md:text-3xl font-semibold">
                 {userName.charAt(0).toUpperCase()}
               </span>
             </div>
-            <p className="text-white text-sm">{userName}</p>
+            <p className="text-white text-sm md:text-base">{userName}</p>
             {videoError && (
               <p className="text-red-400 text-xs mt-1">Video error</p>
             )}
             {!isVideoEnabled && (
-              <p className="text-gray-400 text-xs mt-1">Kamera mati</p>
+              <p className="text-gray-400 text-xs md:text-sm mt-1">Kamera mati</p>
             )}
           </div>
         </div>
