@@ -24,6 +24,21 @@ const getGridRows = (count: number): string => {
   return "grid-rows-4";
 };
 
+// Fungsi baru untuk menentukan kelas tile berdasarkan status kamera
+const getTileClass = (totalUsers: number, isVideoOn: boolean, isScreenShare: boolean = false): string => {
+  if (isScreenShare) return "w-full h-full";
+  
+  // Jika kamera mati, berikan ukuran yang lebih kecil dan proporsional
+  if (!isVideoOn) {
+    if (totalUsers === 1) return "w-full max-w-md h-[60vh] mx-auto";
+    if (totalUsers <= 4) return "aspect-square max-h-[300px]";
+    return "aspect-square max-h-[250px]";
+  }
+  
+  // Jika kamera hidup, gunakan aspect-video
+  return "aspect-video min-h-[150px]";
+};
+
 interface VideoGridProps {
   localStream?: MediaStream;
   screenStream?: MediaStream;
@@ -48,6 +63,9 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
   isLocalVideoEnabled,
 }) => {
   const totalUsers = users.length + (localStream || screenStream ? 1 : 0);
+  
+  // Cek apakah ada kamera yang aktif
+  const anyCamOn = isLocalVideoEnabled || users.some(user => user.isVideoEnabled);
 
   if (isScreenSharing) {
     return (
@@ -103,7 +121,11 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
       <div
         className={cn("flex items-center justify-center h-full p-4", className)}
       >
-        <div className="w-full max-w-4xl aspect-video rounded-lg overflow-hidden shadow-2xl">
+        <div className={cn(
+          isLocalVideoEnabled 
+            ? "w-full max-w-4xl aspect-video rounded-lg overflow-hidden shadow-2xl" 
+            : "w-full h-[60vh] max-w-3xl rounded-lg overflow-hidden shadow-2xl flex items-center justify-center"
+        )}>
           {localStream && (
             <VideoPlayer
               key={localUser?.id || "local-user"}
@@ -112,6 +134,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
               isMuted={!isLocalAudioEnabled}
               isVideoEnabled={isLocalVideoEnabled}
               userName={localUser?.name || "You"}
+              className="w-full h-full"
             />
           )}
         </div>
@@ -125,6 +148,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
         "grid gap-2 p-4 h-full",
         getGridCols(totalUsers),
         getGridRows(totalUsers),
+        !anyCamOn && "place-items-center", // Pusatkan grid jika semua kamera mati
         className
       )}
     >
@@ -137,7 +161,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
           isMuted={!isLocalAudioEnabled}
           isVideoEnabled={isLocalVideoEnabled}
           userName={localUser?.name || "You"}
-          className="min-h-[150px]"
+          className={getTileClass(totalUsers, isLocalVideoEnabled)}
         />
       )}
 
@@ -152,7 +176,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
             isMuted={!user.isAudioEnabled}
             isVideoEnabled={user.isVideoEnabled}
             userName={user.name}
-            className="min-h-[150px]"
+            className={getTileClass(totalUsers, user.isVideoEnabled)}
           />
         );
       })}

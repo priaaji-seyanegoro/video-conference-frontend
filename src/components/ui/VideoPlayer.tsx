@@ -24,6 +24,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoError, setVideoError] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speakingIntensity, setSpeakingIntensity] = useState(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -108,8 +109,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         sourceRef.current = null;
       }
       setIsSpeaking(false);
+      setSpeakingIntensity(0);
     };
 
+    // Jangan hentikan analisis audio jika hanya kamera yang dimatikan
+    // Cek apakah ada audio track dan tidak di-mute
     if (stream && stream.getAudioTracks().length > 0 && !isMuted) {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext ||
@@ -122,9 +126,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const analyser = analyserRef.current;
       if (!analyser) return;
 
-      sourceRef.current =
-        audioContextRef.current.createMediaStreamSource(stream);
-      sourceRef.current.connect(analyser);
+      // Buat source baru hanya jika belum ada atau stream berubah
+      if (!sourceRef.current) {
+        sourceRef.current =
+          audioContextRef.current.createMediaStreamSource(stream);
+        sourceRef.current.connect(analyser);
+      }
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
@@ -135,9 +142,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const average =
           dataArray.reduce((acc, val) => acc + val, 0) / dataArray.length;
 
-        if (isLocal) {
-          //   console.log(`Local audio level: ${average.toFixed(2)}`);
-        }
+        // Hitung intensitas berbicara (0-100)
+        const intensity = Math.min(100, Math.floor(average * 5));
+        setSpeakingIntensity(intensity);
 
         if (average > 5) {
           setIsSpeaking(true);
@@ -148,13 +155,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         animationFrameIdRef.current = requestAnimationFrame(checkSpeaking);
       };
 
-      checkSpeaking();
+      // Mulai analisis audio jika belum berjalan
+      if (!animationFrameIdRef.current) {
+        checkSpeaking();
+      }
     } else {
       stopAudioAnalysis();
     }
 
     return () => {
-      stopAudioAnalysis();
+      // Hanya hentikan analisis audio jika komponen unmount atau audio dimatikan
+      // bukan saat kamera dimatikan
+      if (isMuted || !stream || stream.getAudioTracks().length === 0) {
+        stopAudioAnalysis();
+      }
     };
   }, [stream, isMuted, isLocal]);
 
@@ -201,13 +215,42 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return !!vt && vt.readyState === 'live' && vt.enabled !== false;
   })();
 
+  // Hitung warna border berdasarkan intensitas berbicara
+  const getBorderColor = () => {
+    if (!isSpeaking || isMuted) return "";
+    
+    // Warna dari hijau ke kuning ke merah berdasarkan intensitas
+    if (speakingIntensity < 30) return "border-green-500";
+    if (speakingIntensity < 60) return "border-yellow-500";
+    return "border-red-500";
+  };
+
+  // Hitung ukuran border berdasarkan intensitas berbicara
+  const getBorderWidth = () => {
+    if (!isSpeaking || isMuted) return "";
+    
+    // Ukuran border dari 2px hingga 6px berdasarkan intensitas
+    if (speakingIntensity < 30) return "border-2";
+    if (speakingIntensity < 60) return "border-4";
+    return "border-6";
+  };
+
+  // Hitung animasi pulse berdasarkan intensitas berbicara
+  const getPulseAnimation = () => {
+    if (!isSpeaking || isMuted) return "";
+    
+    // Kecepatan animasi pulse berdasarkan intensitas
+    if (speakingIntensity < 30) return "animate-pulse-slow";
+    if (speakingIntensity < 60) return "animate-pulse";
+    return "animate-pulse-fast";
+  };
+
   const shouldRenderVideo = isVideoEnabled && isVideoTrackLive && !!stream && !videoError;
 
   return (
     <div
       className={cn(
         "relative bg-gray-900 rounded-lg overflow-hidden transition-all duration-300",
-        isSpeaking && !isMuted && "border-4 border-green-500",
         className
       )}
     >
@@ -227,17 +270,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-gray-900">
           <div className="text-center">
-            <div className="w-20 h-20 md:w-28 md:h-28 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
-              <span className="text-white text-2xl md:text-3xl font-semibold">
+            <div className="w-24 h-24 md:w-32 md:h-32 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+              <span className="text-white text-3xl md:text-4xl font-semibold">
                 {userName.charAt(0).toUpperCase()}
               </span>
             </div>
-            <p className="text-white text-sm md:text-base">{userName}</p>
+            <p className="text-white text-base md:text-lg font-medium">{userName}</p>
             {videoError && (
               <p className="text-red-400 text-xs mt-1">Video error</p>
             )}
             {!isVideoEnabled && (
-              <p className="text-gray-400 text-xs md:text-sm mt-1">Kamera mati</p>
+              <p className="text-gray-400 text-sm md:text-base mt-2">Kamera mati</p>
             )}
           </div>
         </div>
@@ -246,8 +289,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {/* Status indicators */}
       <div className="absolute bottom-2 left-2 flex space-x-1">
         {!isMuted ? (
-          <div className="bg-green-500 p-1 rounded-full">
-            <Mic className="w-3 h-3 text-white" />
+          <div 
+            className={cn(
+              "p-1 rounded-full transition-colors duration-150",
+              isSpeaking 
+                ? speakingIntensity < 30 
+                  ? "bg-green-600" 
+                  : speakingIntensity < 60 
+                    ? "bg-green-500" 
+                    : "bg-green-400"
+                : "bg-green-800"
+            )}
+          >
+            <Mic className={cn(
+              "w-3 h-3 text-white",
+              isSpeaking && "animate-pulse-slow"
+            )} />
           </div>
         ) : (
           <div className="bg-red-500 p-1 rounded-full">
